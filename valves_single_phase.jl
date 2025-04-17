@@ -1,6 +1,6 @@
 #file that contains the functions of the valve model 
 
-module valves
+module valves_single_phase
 
 export A_flow, flow_velocity, isentropic_nozzle, valve_dynamics
 
@@ -118,7 +118,7 @@ function valve_dynamics(y, v, params, State_up, State_down, w_t)
         y = y_stop
     elseif y < 0.0
         y = 0.0
-    elseif y < 1e-7
+    elseif y < 1e-15
         y = 0.0
     end
 

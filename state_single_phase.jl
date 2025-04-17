@@ -1,4 +1,4 @@
-module state
+module state_single_phase
 using CoolProp
 
 export calc_state, calc_downstream_pressure, guess_working_chamber_state

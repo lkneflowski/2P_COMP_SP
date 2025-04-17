@@ -8,12 +8,12 @@ using DataFrames
 using CSV
 
 # include the module valves to get the valves specific functions 
-include("valves.jl")
+include("valves_single_phase.jl")
 # include the state functions
-include("state.jl")
+include("state_single_phase.jl")
 
-using .valves
-using .state
+using .valves_single_phase
+using .state_single_phase
 
 # define global variables, series 
 global progress_plot = nothing
@@ -57,7 +57,7 @@ h_in = PropsSI("H", "T", T_0, "D", ρ_0, fluid)
 
 
 #make an initial guess for the density and the temperature --> isentropic compression 
-rho_start, T_start = state.guess_working_chamber_state(ρ_0, T_0, p_c, fluid)
+rho_start, T_start = state_single_phase.guess_working_chamber_state(ρ_0, T_0, p_c, fluid)
 
 #adiabatic compressor 
 Q_dot = 0.0 
@@ -227,24 +227,24 @@ function compressor!(du, u, p, t)
 
     #VALVES 
     #upstreamstate infront of the suction valve (suction conditions)
-    State_up_s = state.calc_state(ρ_0, T_0, fluid)
+    State_up_s = state_single_phase.calc_state(ρ_0, T_0, fluid)
     # calc the state in the working chamber from the solution of the thermodynamic model
-    State_down_s = state.calc_state(u[1], u[2], fluid)
+    State_down_s = state_single_phase.calc_state(u[1], u[2], fluid)
     # Berechnung der Strömungsgeschwindigkeit durch das Saugventil
-    w_t_s, mdot_s = valves.flow_velocity(u[8], y_tran_s, State_up_s, State_down_s, D_valve_s, A_port_s)
+    w_t_s, mdot_s = valves_single_phase.flow_velocity(u[4], y_tran_s, State_up_s, State_down_s, D_valve_s, A_port_s)
     
 
     State_up_d = State_down_s
     State_down_d = Dict("p" => p_c)
 
-    w_t_d, mdot_d = valves.flow_velocity(u[9], y_tran_d, State_up_d, State_down_d, D_valve_d, A_port_d)
+    w_t_d, mdot_d = valves_single_phase.flow_velocity(u[6], y_tran_d, State_up_d, State_down_d, D_valve_d, A_port_d)
 
 
     #WORKING CHAMBER 
     #drho/dt
     du[1] = 1/V_t(t) * (-u[1] * dVdt(t) + du[3])
     #dT/dt
-    du[2] = (-u[2] * (∂p∂T_s(u)) * (dVdt(t) - 1/u[1] * du[3]) - h_u(u) * du[3] + Q_dot + (mdot_s * h(T_0, ρ_0, fluid) - mdot_d * h_u(u)))  /(V_t(t) * u[1] * c_vu(u))
+    du[2] = (-u[2] * (∂p∂T_s(u)) * (dVdt(t) - 1/u[1] * du[3]) - h_u(u) * du[3] + Q_dot + (mdot_s * h(T_0, ρ_0, fluid) - mdot_d * h_u(u)))  / (u[3] * c_vu(u))
     #dm/dt
     du[3] = mdot_s - mdot_d
 
@@ -252,11 +252,11 @@ function compressor!(du, u, p, t)
     
     if y_s > y_tran_s # flux driven region
         du[4] = v_s  # dy/dt = v
-        du[5] = (1/m_eff_s) * ( (1/2) * c_w_s * State_up_s["rho"] * w_t_s^2 * A_valve_s + State_up_s["rho"] * (w_t_s - v_s)^2 * A_port_s - k_valve_s * y_s)
+        du[5] = (1/m_eff_s) * ( (1/2) * c_w_s * State_up_s["rho"] * w_t_s^2 * A_valve_s + State_up_s["rho"] * (w_t_s - v_s)^2 * A_port_s - k_valve_s * u[4])
         
     else          # pressure driven region 
         du[4] = v_s  # dy/dt = v
-        du[5] = (1/m_eff_s) * ( (1/2) * c_w_s * State_up_s["rho"] * w_t_s^2 * A_valve_s + (State_up_s["p"] - State_down_s["p"])*A_valve_s - k_valve_s * y_s)
+        du[5] = (1/m_eff_s) * ( (1/2) * c_w_s * State_up_s["rho"] * w_t_s^2 * A_valve_s + (State_up_s["p"] - State_down_s["p"])*A_valve_s - k_valve_s * u[4])
     end 
     
 
@@ -404,7 +404,7 @@ end
 function affect_y_zero_s_transfer!(integrator)
     integrator.p.valve_s_locked = true 
     integrator.u[4] = 0.0  # Setze den Ventilhub auf 0
-    integrator.u[5] = 0.0  # Geschwindigkeit auf 0 setzen
+    #integrator.u[5] = 0.0  # Geschwindigkeit auf 0 setzen
 end 
 
 #Callback6 --> Continous Callback to detect the transfer (to be checked)
@@ -415,7 +415,7 @@ end
 function affect_y_stop_s_transfer!(integrator)
     integrator.p.valve_s_stopper = true 
     integrator.u[4] = y_stop_s  # Setze den Ventilhub auf den maximalen Wert
-    integrator.u[5] = 0.0       # Geschwindigkeit auf 0 setzen
+    #integrator.u[5] = 0.0       # Geschwindigkeit auf 0 setzen
 end
 #__________________________________________________________________________________________
 
@@ -477,7 +477,7 @@ end
 function affect_y_zero_d_transfer!(integrator)
     integrator.p.valve_d_locked = true 
     integrator.u[6] = 0.0  # Setze den Ventilhub auf 0
-    integrator.u[7] = 0.0  # Geschwindigkeit auf 0 setzen
+    #integrator.u[7] = 0.0  # Geschwindigkeit auf 0 setzen
 end 
 
 function condition_y_stop_d_transfer(u, t, integrator)
@@ -487,7 +487,7 @@ end
 function affect_y_stop_d_transfer!(integrator)
     integrator.p.valve_d_stopper = true 
     integrator.u[6] = y_stop_d  # Setze den Ventilhub auf den maximalen Wert
-    integrator.u[7] = 0.0       # Geschwindigkeit auf 0 setzen
+    #integrator.u[7] = 0.0       # Geschwindigkeit auf 0 setzen
 end
 
 
@@ -531,7 +531,7 @@ function create_callbacks()
 
     #log_valves_cb = FunctionCallingCallback(log_valve_states)
 
-    return CallbackSet(callback_y_zero_s, callback_unlock_s, callback_y_s, callback_y_zero_s_transfer, callback_unlock_s_stopper, callback_y_s_transfer,      
+    return CallbackSet(callback_y_zero_s, callback_unlock_s, callback_y_s, callback_unlock_s_stopper, callback_y_s_transfer, callback_y_s_transfer,      
                        callback_y_zero_d, callback_unlock_d, callback_y_d, callback_y_zero_d_transfer, callback_unlock_d_stopper, callback_y_d_transfer)
 end
 
