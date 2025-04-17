@@ -404,7 +404,7 @@ end
 function affect_y_zero_s_transfer!(integrator)
     integrator.p.valve_s_locked = true 
     integrator.u[4] = 0.0  # Setze den Ventilhub auf 0
-    #integrator.u[5] = 0.0  # Geschwindigkeit auf 0 setzen
+    integrator.u[5] = 0.0  # Geschwindigkeit auf 0 setzen
 end 
 
 #Callback6 --> Continous Callback to detect the transfer (to be checked)
@@ -415,7 +415,7 @@ end
 function affect_y_stop_s_transfer!(integrator)
     integrator.p.valve_s_stopper = true 
     integrator.u[4] = y_stop_s  # Setze den Ventilhub auf den maximalen Wert
-    #integrator.u[5] = 0.0       # Geschwindigkeit auf 0 setzen
+    integrator.u[5] = 0.0       # Geschwindigkeit auf 0 setzen
 end
 #__________________________________________________________________________________________
 
@@ -477,7 +477,7 @@ end
 function affect_y_zero_d_transfer!(integrator)
     integrator.p.valve_d_locked = true 
     integrator.u[6] = 0.0  # Setze den Ventilhub auf 0
-    #integrator.u[7] = 0.0  # Geschwindigkeit auf 0 setzen
+    integrator.u[7] = 0.0  # Geschwindigkeit auf 0 setzen
 end 
 
 function condition_y_stop_d_transfer(u, t, integrator)
@@ -487,7 +487,7 @@ end
 function affect_y_stop_d_transfer!(integrator)
     integrator.p.valve_d_stopper = true 
     integrator.u[6] = y_stop_d  # Setze den Ventilhub auf den maximalen Wert
-    #integrator.u[7] = 0.0       # Geschwindigkeit auf 0 setzen
+    integrator.u[7] = 0.0       # Geschwindigkeit auf 0 setzen
 end
 
 

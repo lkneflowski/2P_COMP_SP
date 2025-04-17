@@ -85,9 +85,10 @@ function isentropic_nozzle(A, State_up, State_down)
     if pr > pr_crit
         #mass flow rate is not choked
         #mdot = A * sqrt(p_up * rho_up) * sqrt(((2*k/(k-1))*(pr^(2/k) - pr^((k+1)/k))))
-        mdot = (A * p_up /(sqrt(R * T_up))) * (2*k/(k-1.0))*pr^(2.0/k) * sqrt((1-pr^((k-1)/k)))
+        #mdot = (A * p_up /(sqrt(R * T_up))) * (2*k/(k-1.0))*pr^(2.0/k) * sqrt((1-pr^((k-1)/k)))
+        mdot=A*p_up/(R*T_up)^0.5*(2*k/(k-1.0)*pr^(2.0/k)*(1-pr^((k-1.0)/k)))^0.5
         #throat temperature
-        T_down = T_up * (p_down/p_up)^((k-1)/k)
+        T_down = T_up * (p_down/p_up)^((k-1.0)/k)
         #throat density 
         rho_down = p_down/(R*T_down)
         #Velocity at throat 
@@ -107,39 +108,6 @@ function isentropic_nozzle(A, State_up, State_down)
 
 
     #println("w", w, "m_dot", mdot)
-end
-
-
-function valve_dynamics(y, v, params, State_up, State_down, w_t)
-    c_w, A_valve, A_port, k_valve, m_eff, y_stop, y_tran = params
-
-    # Ventilbeschränkungen
-    if y > y_stop
-        y = y_stop
-    elseif y < 0.0
-        y = 0.0
-    elseif y < 1e-15
-        y = 0.0
-    end
-
-    # Ventildynamik
-    if y > y_tran  # Strömungsgetriebener Bereich
-        dy = v
-        dv = (1/m_eff) * (
-            0.5 * c_w * State_up["rho"] * w_t^2 * A_valve +
-            State_up["rho"] * (w_t - v)^2 * A_port -
-            k_valve * y
-        )
-    else  # Druckgetriebener Bereich
-        dy = v
-        dv = (1/m_eff) * (
-            0.5 * c_w * State_up["rho"] * w_t^2 * A_valve +
-            (State_up["p"] - State_down["p"]) * A_valve -
-            k_valve * y
-        )
-    end
-
-    return dy, dv, y
 end
 
 
