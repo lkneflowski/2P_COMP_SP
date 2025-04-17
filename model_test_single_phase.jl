@@ -231,13 +231,13 @@ function compressor!(du, u, p, t)
     # calc the state in the working chamber from the solution of the thermodynamic model
     State_down_s = state_single_phase.calc_state(u[1], u[2], fluid)
     # Berechnung der Strömungsgeschwindigkeit durch das Saugventil
-    w_t_s, mdot_s = valves_single_phase.flow_velocity(u[4], y_tran_s, State_up_s, State_down_s, D_valve_s, A_port_s)
+    w_t_s, mdot_s = valves_single_phase.flow_velocity(u[8], y_tran_s, State_up_s, State_down_s, D_valve_s, A_port_s)
     
 
     State_up_d = State_down_s
     State_down_d = Dict("p" => p_c)
 
-    w_t_d, mdot_d = valves_single_phase.flow_velocity(u[6], y_tran_d, State_up_d, State_down_d, D_valve_d, A_port_d)
+    w_t_d, mdot_d = valves_single_phase.flow_velocity(u[9], y_tran_d, State_up_d, State_down_d, D_valve_d, A_port_d)
 
 
     #WORKING CHAMBER 
@@ -531,7 +531,7 @@ function create_callbacks()
 
     #log_valves_cb = FunctionCallingCallback(log_valve_states)
 
-    return CallbackSet(callback_y_zero_s, callback_unlock_s, callback_y_s, callback_unlock_s_stopper, callback_y_s_transfer, callback_y_s_transfer,      
+    return CallbackSet(callback_y_zero_s, callback_unlock_s, callback_y_s, callback_unlock_s_stopper, callback_y_s_transfer, callback_y_s_transfer, callback_y_zero_s_transfer,      
                        callback_y_zero_d, callback_unlock_d, callback_y_d, callback_y_zero_d_transfer, callback_unlock_d_stopper, callback_y_d_transfer)
 end
 
@@ -573,7 +573,7 @@ prob = ODEProblem(compressor!, u₀, tspan, p)
 
 
 #sol = solve(prob, Tsit5(), callback = combined_callbacks, reltol=1e-7, abstol=1e-7, dtmax = 1e-3)
-sol = solve(prob, BS3(), callback = combined_callbacks, reltol=1e-4, abstol=1e-4)
+sol = solve(prob, BS3(), callback = combined_callbacks, reltol=1e-5, abstol=1e-5)
 
 plot(sol.t, sol.u[:, 1], label="ρ(t)", xlabel="Zeit", ylabel="ρ")
 

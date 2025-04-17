@@ -84,8 +84,6 @@ function isentropic_nozzle(A, State_up, State_down)
     #wenn das kritische Druckverhältnis überschritten wird 
     if pr > pr_crit
         #mass flow rate is not choked
-        #mdot = A * sqrt(p_up * rho_up) * sqrt(((2*k/(k-1))*(pr^(2/k) - pr^((k+1)/k))))
-        #mdot = (A * p_up /(sqrt(R * T_up))) * (2*k/(k-1.0))*pr^(2.0/k) * sqrt((1-pr^((k-1)/k)))
         mdot=A*p_up/(R*T_up)^0.5*(2*k/(k-1.0)*pr^(2.0/k)*(1-pr^((k-1.0)/k)))^0.5
         #throat temperature
         T_down = T_up * (p_down/p_up)^((k-1.0)/k)
