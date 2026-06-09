@@ -1,6 +1,7 @@
 using FiniteDifferences
 using DifferentialEquations
 using Plots
+gr()
 using CoolProp
 using ProgressMeter
 using Sundials
@@ -45,6 +46,46 @@ p_o, p_c = 3e5, 8e5
 
 # superheating in K 
 dT_sh = 10 
+# subcooling in K 
+dT_sc = 3
+
+# condensing temp 
+T_cond = PropsSI("T", "P", p_c, "Q", 1, fluid)
+
+
+###
+# define inlet state of the injection
+###
+
+# subcooled temp
+T_sub = T_cond - dT_sc
+# density of sat. liquid
+rho_cond = PropsSI("D", "P", p_c, "T", T_sub, fluid)
+# condenser outlet state
+cond_outlet_state = state_single_phase.calc_state(rho_cond, T_sub, fluid)
+# injection pressure
+p_inj = 50 * 1e5  
+# isentropic state change by the injection pump 
+s_inj = cond_outlet_state["s"]
+# injection temperature 
+T_inj = PropsSI("T", "S", s_inj, "P", p_inj, fluid)
+println("T_inj:", T_inj, "K")
+# injection density
+rho_inj = PropsSI("D", "S", s_inj, "P", p_inj, fluid)
+println("rho_inj", rho_inj, "kg/m^3")
+
+# injection state --> pressure and entropy
+inj_state = state_single_phase.calc_state(rho_inj, T_inj, fluid)
+
+
+# injection start angle
+inj_angle_diff = 60  
+inj_start_angle = 180
+inj_end_angle = inj_start_angle + inj_angle_diff
+
+
+
+
 # calc evap temp 
 T_evap = PropsSI("T", "P", p_o, "Q", 1, fluid)
 # calc suction temp 
@@ -74,6 +115,15 @@ V_tot = V_disp + V_clear
 
 # mass of refrigerant in the cylinder at theta = 0 
 m_start = V_clear * rho_start
+
+
+
+###
+# definition of the injection diameter 
+###
+
+D_inj = 0.15*1e-3  # injector diameter --> wikipedia
+
 
 
 # valve geometry inputs 
@@ -185,10 +235,14 @@ mutable struct CompressorParams
     suction_valve::NTuple{7, Float64}
     discharge_valve::NTuple{7, Float64}
     common::NTuple{6, Any}
+    D_inj::Float64
     valve_s_locked::Bool
     valve_d_locked::Bool
     valve_s_stopper:: Bool
     valve_d_stopper:: Bool 
+    inj_state::Dict{Any, Any}
+    inj_start_angle::Float64
+    inj_end_angle::Float64
 end
 
 # Initialize parameters
@@ -196,10 +250,14 @@ p = CompressorParams(
     (c_w_s, A_valve_s, A_port_s, k_valve_s, m_eff_s, y_tran_s, y_stop_s),
     (c_w_d, A_valve_d, A_port_d, k_valve_d, m_eff_d, y_tran_d, y_stop_d),
     (ρ_0, T_0, fluid, ω, p_c, Q_dot),
+    D_inj,
     false,
     false, 
     false, 
-    false
+    false, 
+    inj_state, 
+    inj_start_angle, 
+    inj_end_angle
 )
 
 
@@ -210,11 +268,17 @@ function compressor!(du, u, p, t)
     c_w_s, A_valve_s, A_port_s, k_valve_s, m_eff_s, y_tran_s, y_stop_s = p.suction_valve
     c_w_d, A_valve_d, A_port_d, k_valve_d, m_eff_d, y_tran_d, y_stop_d = p.discharge_valve
     ρ_0, T_0, fluid, ω, p_c, Q_dot = p.common
+    D_inj = p.D_inj
     valve_s_locked = p.valve_s_locked
     valve_d_locked = p.valve_d_locked
     valve_s_stopper = p.valve_s_stopper
     valve_d_stopper = p.valve_d_stopper
+    inj_state = p.inj_state
+    inj_start_angle = p.inj_start_angle
+    inj_end_angle = p.inj_end_angle
 
+
+    theta = ω * t * (180/pi)
     
 
     #u[1] = T 
@@ -240,13 +304,16 @@ function compressor!(du, u, p, t)
     w_t_d, mdot_d = valves_single_phase.flow_velocity(u[9], y_tran_d, State_up_d, State_down_d, D_valve_d, A_port_d)
 
 
+    m_dot_inj = valves_single_phase.liquid_orifice_injector(theta, D_inj, inj_state, State_down_s, inj_start_angle, inj_end_angle)
+
+
     #WORKING CHAMBER 
     #drho/dt
     du[1] = 1/V_t(t) * (-u[1] * dVdt(t) + du[3])
     #dT/dt
-    du[2] = (-u[2] * (∂p∂T_s(u)) * (dVdt(t) - 1/u[1] * du[3]) - h_u(u) * du[3] + Q_dot + (mdot_s * h(T_0, ρ_0, fluid) - mdot_d * h_u(u)))  / (u[3] * c_vu(u))
+    du[2] = (-u[2] * (∂p∂T_s(u)) * (dVdt(t) - 1/u[1] * du[3]) - h_u(u) * du[3] + Q_dot + mdot_s * h(T_0, ρ_0, fluid) - mdot_d * h_u(u) + m_dot_inj * inj_state["h"])  / (u[3] * c_vu(u))
     #dm/dt
-    du[3] = mdot_s - mdot_d
+    du[3] = mdot_s - mdot_d + m_dot_inj
 
 
     
@@ -292,63 +359,6 @@ function compressor!(du, u, p, t)
 
 end
 
-
-
-function dynamic_plot_callback(u, t, integrator)
-    # Declare global variables
-    global progress_plot, time_series, T_series, ρ_series, p_series, m_series, y_s_series, y_d_series
-
-    # Current time and state from function arguments
-    current_time = t
-    current_state = u
-    
-
-    # Extract specific state variables
-    T = current_state[2]  # Temperature
-    ρ = current_state[1]  # Density
-    m = current_state[3]
-    y_s = current_state[4]
-    y_d = current_state[6]
-
-    # Calculate pressure based on temperature and density
-    fluid = "R134a"
-    p = PropsSI("P", "D", ρ, "T", T, fluid)
-
-    # Append values to time series
-    push!(time_series, current_time)
-    push!(T_series, T)
-    push!(ρ_series, ρ)
-    push!(p_series, p)
-    push!(m_series, m)
-    push!(y_s_series, y_s)
-    push!(y_d_series, y_d)
-
-    # Initialize the plot only once
-    if progress_plot === nothing
-        progress_plot = plot(
-            layout=(6, 1),
-            size=(1000, 900)
-        )
-        # Create subplots without legends (they update automatically)
-        plot!(progress_plot[1], time_series, T_series, label="", xlabel="Zeit [s]", ylabel="Temperatur [K]")
-        plot!(progress_plot[2], time_series, ρ_series, label="", xlabel="Zeit [s]", ylabel="Dichte [kg/m³]")
-        plot!(progress_plot[3], time_series, p_series, label="", xlabel="Zeit [s]", ylabel="Druck [Pa]")
-        plot!(progress_plot[4], time_series, m_series, label="", xlabel="Zeit [s]", ylabel="Masse m")
-        plot!(progress_plot[5], time_series, y_s_series, label="", xlabel="Zeit [s]", ylabel="Ventilhub Saugventil")
-        plot!(progress_plot[6], time_series, m_series, label="", xlabel="Zeit [s]", ylabel="Ventilhub Druckventil")
-    else
-        # Update the subplots with new data
-        plot!(progress_plot[1], time_series, T_series, label="", overwrite = true)
-        plot!(progress_plot[2], time_series, ρ_series, label="",overwrite = true)
-        plot!(progress_plot[3], time_series, p_series, label="", overwrite = true)
-        plot!(progress_plot[4], time_series, m_series, label="", overwrite = true)
-        plot!(progress_plot[5], time_series, y_s_series, label="", overwrite = true, ylim=(-0.005, 0.002))
-        plot!(progress_plot[6], time_series, y_d_series, label="", overwrite = true)
-    end
-
-    # Display the updated plot
-    display(progress_plot)
-end
 
 #SUCTIONVALVE
 #__________________________________________________________________________________________
@@ -550,9 +560,6 @@ progress_cb = FunctionCallingCallback(progress_callback)
 
 callbacks = create_callbacks()
 
-plot_callback = FunctionCallingCallback(dynamic_plot_callback)
-
-#plot_callback = SavingCallback((u, t, integrator) -> dynamic_plot_callback(integrator),save_positions=(false, false))
 
 # Kombiniere mit anderen Callbacks
 combined_callbacks = CallbackSet(callbacks, progress_cb)
@@ -573,7 +580,11 @@ prob = ODEProblem(compressor!, u₀, tspan, p)
 
 
 #sol = solve(prob, Tsit5(), callback = combined_callbacks, reltol=1e-7, abstol=1e-7, dtmax = 1e-3)
-sol = solve(prob, BS3(), callback = combined_callbacks, reltol=1e-5, abstol=1e-5)
+sol = solve(prob, BS3(), callback = combined_callbacks, reltol=1e-4, abstol=1e-4)
+
+println("Solver fertig")
+println(sol.retcode)
+
 
 plot(sol.t, sol.u[:, 1], label="ρ(t)", xlabel="Zeit", ylabel="ρ")
 
@@ -586,6 +597,7 @@ sol_y_d = sol_matrix[:,6]
 sol_y_s_dummy = sol_matrix[:,8]
 sol_y_d_dummy = sol_matrix[:,9]
 dt = diff(sol.t)
+dt_full = vcat(dt, last(dt))  # dt hat jetzt wieder volle Länge
 #φ_mid = φ[1:end-1] .+ diff(φ) ./ 2  # Kurbelwinkelwerte in der Mitte der Schritte
 
 sol_p = PropsSI.("P", "T", sol_T, "D", sol_rho, fluid)
@@ -606,19 +618,19 @@ data = DataFrame(
     y_d_dummy = sol_y_d_dummy,
     p = sol_p,
     s = sol_s,
+    dt = dt_full
 )
 
 
 file_path = "C:\\Users\\Leonard Kneflowski\\PycharmProjects\\2P-Compresion\\simulation_results_main.csv"
 
-
 # Datei speichern
-#CSV.write(file_path, data)
-
+CSV.write(file_path, data)
+println("csv geschrieben")
 
 
 # Plot des Drucks über den Kurbelwinkel
-plot(
+plt = plot(
 plot(φ, sol_p*1e-5, label="Druck p(φ)", xlabel="Kurbelwinkel φ [rad]", ylabel="Druck p [Pa]", legend=:topleft),
 plot(φ, sol_m, xlabel="Kurbelwinkel φ [rad]", ylabel="Masse m", legend=:topleft),
 plot(φ, sol_y_s, xlabel="Kurbelwinkel φ [rad]", ylabel="Ventilhub S", legend=:topright),
@@ -631,5 +643,5 @@ plot(φ, sol_y_d_dummy, xlabel="Kurbelwinkel φ [rad]", ylabel="Ventilhub D", le
 layout=(3, 2),  # 4 Zeilen, 2 Spalten
 size=(1200, 1000),
 )
-
+display(plt)
 

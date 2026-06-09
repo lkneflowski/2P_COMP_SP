@@ -15,6 +15,7 @@ function calc_state(rho, T, fluid)
     state["p"]= PropsSI("P", "D", state["rho"], "T", state["T"], fluid)   #Pa
     state["h"] = PropsSI("H", "D", state["rho"], "T", state["T"], fluid)  #J/kg
     state["cp"] = PropsSI("CP0MASS", "D", state["rho"], "T", state["T"], fluid) # J/kg/K
+    state["s"] = PropsSI("S", "D", state["rho"], "T", state["T"], fluid)   
     #state["cv"] = PropsSI("CVMASS", "D", state["rho"], "T", state["T"], fluid)
     state["M"] = PropsSI("MOLARMASS", "D", state["rho"], "T", state["T"], fluid) #kg/mol
 

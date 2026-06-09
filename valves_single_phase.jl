@@ -16,7 +16,24 @@ function A_flow(y, y_tran, D_valve, A_port)
         return pi * y * D_valve
     end
 end
- 
+
+
+# injector model 
+function liquid_orifice_injector(theta, D_inj, liquid_state, chamber_state, inj_start_angle, inj_end_angle ; C_d_orifice = 0.9)
+    
+    if theta > inj_start_angle && theta < inj_end_angle
+        # cross section area
+        A_orifice = (pi* D_inj^2)/4
+        # mass flow rate from orifice equation
+        m_dot_inj = C_d_orifice * A_orifice * sqrt(2*liquid_state["rho"]*(liquid_state["p"] - chamber_state["p"]))
+    else 
+        m_dot_inj = 0.0
+    end
+
+    return m_dot_inj
+end
+
+
 #function to calculate the valve flow velocity 
 function flow_velocity(y, y_tran, State_up, State_down, D_valve, A_port)
     
